@@ -377,6 +377,24 @@ class EventViewSet(viewsets.GenericViewSet, mixins.RetrieveModelMixin, mixins.Li
     ordering = ('-is_today', 'registration_filtered', 'id')
 
     def get_queryset(self):
+        events = Event.by_registration
+        events = self.filter_restricted(events)
+        events = self.filter_period(events)
+        return events
+
+    def filter_period(self, events):
+        """
+        Filter event based on a time period.
+        :return: All events with a event_start between the two given dates.
+        """
+        event_period_start = self.request.query_params.get('event_period_start', None)
+        event_period_end = self.request.query_params.get('event_period_end', None)
+        if event_period_start and event_period_end:
+            events = events.filter(event_start__range=(event_period_start, event_period_end))
+
+        return events
+
+    def filter_restricted(self, events):
         """
         :return: Queryset filtered by these requirements:
             event has NO group restriction OR user having access to restricted event
@@ -384,7 +402,6 @@ class EventViewSet(viewsets.GenericViewSet, mixins.RetrieveModelMixin, mixins.Li
         return Event.by_registration.filter(
             Q(group_restriction__isnull=True) | Q(group_restriction__groups__in=self.request.user.groups.all())). \
             distinct()
-
 
 class AttendanceEventViewSet(viewsets.GenericViewSet, mixins.RetrieveModelMixin, mixins.ListModelMixin):
     queryset = AttendanceEvent.objects.all()

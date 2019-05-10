@@ -2,7 +2,7 @@
 {% load raven %}
 
 <!DOCTYPE html>
-<html>
+<html lang="nb-NO">
 <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
@@ -158,6 +158,13 @@
                         </ul>
                     </li>
                     {% endif %}
+                    {% if 'hobbygroups.change_hobby' in user_permissions %}
+                    <li>
+                        <a href="/dashboard/hobbies">
+                            <i class="fa fa-comments blue"></i> <span>Interessegrupper</span>
+                        </a>
+                    </li>
+                    {% endif %}
                     {% if 'careeropportunity.view_careeropportunity' in user_permissions %}
                     <li class="treeview">
                         <a href="#">
@@ -219,6 +226,13 @@
                         </a>
                     </li>
                     {% endif %}
+                    {% if 'resourcecenter.change_resource' in user_permissions %}
+                    <li>
+                        <a href="/dashboard/resources">
+                            <i class="fa fa-universal-access blue"></i> <span>Ressurser</span>
+                        </a>
+                    </li>
+                    {% endif %}
                     {% if request.user.is_superuser %}
                     <li>
                         <a href="/dashboard/rutinator/">
@@ -262,16 +276,22 @@
                         </ul>
                     </li>
                     {% endif %}
+                    {% if 'webshop.view_category' in user_permissions or 'webshop.view_order' in user_permissions %}
                     <li class="treeview">
                         <a href="#">
                             <i class="fa fa-shopping-cart blue"></i> <span>Webshop</span>
                             <i class="fa fa-angle-down pull-right"></i>
                         </a>
                         <ul class="treeview-menu">
-                            <li><a href="{% url 'dashboard-webshop:categories' %}"><i class="fa fa-angle-double-right orange"></i> Kategorier</a></li>
-                            <li><a href="{% url 'dashboard-webshop:orders'%}"><i class="fa fa-angle-double-right orange"></i> Bestillinger</a></li>
+                            {% if 'webshop.view_category' in user_permissions %}
+                                <li><a href="{% url 'dashboard-webshop:categories' %}"><i class="fa fa-angle-double-right orange"></i> Kategorier</a></li>
+                            {% endif %}
+                            {% if 'webshop.view_order' in user_permissions %}
+                                <li><a href="{% url 'dashboard-webshop:orders'%}"><i class="fa fa-angle-double-right orange"></i> Bestillinger</a></li>
+                            {% endif %}
                         </ul>
                     </li>
+                    {% endif %}
                     <!--<li>
                         <a href="#">
                             <i class="fa fa-bell blue"></i> <span>Til oppfølging</span>

@@ -11,15 +11,15 @@ from apps.authentication.models import OnlineUser as User
 
 
 class Order(models.Model):
-    content_type = models.ForeignKey(ContentType)
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField()
     content_object = GenericForeignKey('content_type', 'object_id')
 
-    order_line = models.ForeignKey('OrderLine', related_name='orders')
+    order_line = models.ForeignKey('OrderLine', related_name='orders', on_delete=models.CASCADE)
     # Price of product when paid
     price = models.DecimalField(max_digits=10, decimal_places=2, blank=True)
     # Quantity of products ordered
-    quantity = models.PositiveIntegerField(default=1, validators=[MinValueValidator(1)])
+    quantity = models.PositiveIntegerField(validators=[MinValueValidator(1)])
 
     def total_price(self):
         return self.content_object.price * self.quantity
@@ -30,9 +30,12 @@ class Order(models.Model):
     def __str__(self):
         return str(self.content_object)
 
+    class Meta:
+        default_permissions = ('add', 'change', 'delete')
+
 
 class OrderLine(models.Model):
-    user = models.ForeignKey(User, related_name="u")
+    user = models.ForeignKey(User, related_name="u", on_delete=models.CASCADE)
     datetime = models.DateTimeField(auto_now_add=True)
     paid = models.BooleanField(default=False)
 
@@ -65,9 +68,15 @@ class OrderLine(models.Model):
     def __str__(self):
         return str(self.pk)
 
+    class Meta:
+        default_permissions = ('add', 'change', 'delete')
+
 
 class MagicToken(models.Model):
-    user = models.ForeignKey(User)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     token = models.CharField('token', default=uuid.uuid4, max_length=36)
     data = models.TextField('data')
     created = models.DateTimeField('created', editable=False, auto_now_add=True)
+
+    class Meta:
+        default_permissions = ('add', 'change', 'delete')

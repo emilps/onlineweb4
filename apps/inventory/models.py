@@ -15,12 +15,13 @@ class ItemCategory(models.Model):
     def __str__(self):
         return self.name
 
-    class Meta(object):
+    class Meta:
         verbose_name = _("Kategori")
         verbose_name_plural = _("Kategorier")
         permissions = (
             ("view_itemcategory", "View Item Category"),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 class Item(models.Model):
@@ -29,9 +30,16 @@ class Item(models.Model):
     description = models.CharField(_("Beskrivelse"), max_length=50, null=True, blank=True)
     price = models.IntegerField(_("Pris"), null=True, blank=True)
     available = models.BooleanField(_("Til salgs"), default=False)
-    category = models.ForeignKey(ItemCategory, verbose_name=_("Kategori"),
-                                 related_name="category", null=True, blank=True)
-    image = models.ForeignKey(ResponsiveImage, null=True, blank=True, default=None)
+    category = models.ForeignKey(
+        ItemCategory,
+        verbose_name=_("Kategori"),
+        related_name="category",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE
+    )
+    image = models.ForeignKey(ResponsiveImage, null=True, blank=True, default=None, on_delete=models.CASCADE)
+    low_stock_treshold = models.IntegerField("Grense for email om lav beholdning", default=10)
 
     @property
     def oldest_expiration_date(self):
@@ -88,7 +96,7 @@ class Item(models.Model):
     def handle_notifications(self, amount):
 
         # Send one notification when the stock goes to or below 10
-        if self.total_amount <= 10 and self.total_amount + amount > 10:
+        if self.total_amount <= self.low_stock_treshold and self.total_amount + amount > self.low_stock_treshold:
             message = "Det er kun " + str(self.total_amount) + " igjen av " + str(self.name) + \
                       " på kontoret.\n\n" \
                       "Dette er en automatisk generert melding og antallet kan være noe feil."
@@ -104,21 +112,23 @@ class Item(models.Model):
     def __str__(self):
         return self.name
 
-    class Meta(object):
+    class Meta:
         verbose_name = _("Vare")
         verbose_name_plural = _("Varer")
         permissions = (
             ("view_item", "View Inventory Item"),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 class Batch(models.Model):
 
-    item = models.ForeignKey(Item, verbose_name=_("Vare"), related_name="batches")
+    item = models.ForeignKey(Item, verbose_name=_("Vare"), related_name="batches", on_delete=models.CASCADE)
     amount = models.IntegerField(_("Antall"), default=0)
     date_added = models.DateField(_("Dato lagt til"), editable=False, auto_now_add=True)
     expiration_date = models.DateField(_("Utløpsdato"), null=True, blank=True, editable=True)
 
-    class Meta(object):
+    class Meta:
         verbose_name = _("Batch")
         verbose_name_plural = _("Batches")
+        default_permissions = ('add', 'change', 'delete')

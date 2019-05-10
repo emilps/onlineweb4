@@ -32,7 +32,7 @@ class UnhandledImage(models.Model):
     def resolution(self):
         return '%sx%s' % (self.image.width, self.image.height)
 
-    class Meta(object):
+    class Meta:
         """
         UnhandledImage Metaclass
         """
@@ -42,6 +42,7 @@ class UnhandledImage(models.Model):
         permissions = (
             ('view_unhandledimage', _('View UnhandledImage')),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 class ResponsiveImage(models.Model):
@@ -155,7 +156,7 @@ class ResponsiveImage(models.Model):
 
         return humanize_size(total)
 
-    class Meta(object):
+    class Meta:
         """
         ResponsiveImage Metaclass
         """
@@ -165,3 +166,4 @@ class ResponsiveImage(models.Model):
         permissions = (
             ('view_responsiveimage', _('View ResponsiveImage')),
         )
+        default_permissions = ('add', 'change', 'delete')

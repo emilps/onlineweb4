@@ -3,8 +3,8 @@ import logging
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 from django.core.mail import EmailMessage, send_mail
-from django.core.urlresolvers import reverse
 from django.template.loader import render_to_string
+from django.urls import reverse
 
 
 def send_approval_notification(approval):
@@ -21,7 +21,7 @@ def send_approval_notification(approval):
         EmailMessage("[Medlemskapssøknad] %s" % approval.applicant.get_full_name(),
                      content, settings.DEFAULT_FROM_EMAIL, to_emails).send()
     except ImproperlyConfigured:
-        logger.warn('Failed to send approval approver notification email for approval#{pk}.'.format(
+        logger.warning('Failed to send approval approver notification email for approval#{pk}.'.format(
             {'pk': approval.pk}))
 
 
@@ -42,10 +42,10 @@ def send_approval_status_update(approval):
         EmailMessage("Soknad om medlemskap i Online er vurdert",
                      message,
                      settings.DEFAULT_FROM_EMAIL,
-                     [approval.applicant.get_email()],
+                     [approval.applicant.get_email().email],
                      ).send()
     except ImproperlyConfigured:
-        logger.warn('Failed to notify applicant about updated status on membership for approval#{pk}.'.format(
+        logger.warning('Failed to notify applicant about updated status on membership for approval#{pk}.'.format(
             {'pk': approval.pk}))
 
 

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import logging
 from collections import OrderedDict
 from datetime import datetime, timedelta
 from random import choice as random_choice
@@ -9,9 +10,12 @@ from django.contrib.auth.models import Group
 from django.contrib.contenttypes.fields import GenericRelation
 from django.core import validators
 from django.core.exceptions import MultipleObjectsReturned, ObjectDoesNotExist, ValidationError
+from django.core.mail import EmailMessage
 from django.db import models
 from django.db.models import SET_NULL, Case, Q, Value, When
 from django.template.defaultfilters import slugify
+from django.template.loader import render_to_string
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import ugettext as _
 from guardian.shortcuts import assign_perm
@@ -33,6 +37,7 @@ TYPE_CHOICES = (
     (5, 'Ekskursjon'),
     (6, 'Internt'),
     (7, 'Annet'),
+    (8, 'Realfagskjelleren')
 )
 
 
@@ -79,7 +84,13 @@ class Event(models.Model):
     objects = models.Manager()
     by_registration = EventOrderedByRegistration()
 
-    author = models.ForeignKey(User, related_name='oppretter', null=True, blank=True)
+    author = models.ForeignKey(
+        User,
+        related_name='oppretter',
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE
+    )
     title = models.CharField(_('tittel'), max_length=60)
     """Event title"""
     event_start = models.DateTimeField(_('start-dato'))
@@ -103,6 +114,10 @@ class Event(models.Model):
     """Event type. Used mainly for filtering"""
     organizer = models.ForeignKey(Group, verbose_name=_('arrangør'), blank=True, null=True, on_delete=SET_NULL)
     """Committee responsible for organizing the event"""
+    visible = models.BooleanField(
+        _('Vis arrangementet utenfor Dashboard og Adminpanelet'),
+        default=True,
+        help_text=_('Denne brukes for å skjule eksisterende arrangementer.'))
 
     feedback = GenericRelation(FeedbackRelation)
 
@@ -136,6 +151,10 @@ class Event(models.Model):
     def company_event(self):
         return CompanyEvent.objects.filter(event=self)
 
+    @property
+    def organizer_name(self):
+        return self.organizer.name
+
     def feedback_mail(self):
         if self.event_type == 1 or self.event_type == 4:  # Sosialt & Utflukt
             return settings.EMAIL_ARRKOM
@@ -150,6 +169,8 @@ class Event(models.Model):
 
     def can_display(self, user):
         restriction = GroupRestriction.objects.filter(event=self).first()
+        if not self.visible:
+            return False
         if not restriction:
             return True
         if not user:
@@ -160,9 +181,8 @@ class Event(models.Model):
     def slug(self):
         return slugify(unidecode(self.title))
 
-    @models.permalink
     def get_absolute_url(self):
-        return 'events_details', None, {'event_id': self.id, 'event_slug': self.slug}
+        return reverse('events_details', kwargs={'event_id': self.id, 'event_slug': self.slug})
 
     def clean(self):
         if not self.organizer:
@@ -185,6 +205,7 @@ class Event(models.Model):
         permissions = (
             ('view_event', 'View Event'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 """
@@ -215,6 +236,7 @@ class Rule(models.Model):
         permissions = (
             ('view_rule', 'View Rule'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 class FieldOfStudyRule(Rule):
@@ -250,6 +272,7 @@ class FieldOfStudyRule(Rule):
         permissions = (
             ('view_fieldofstudyrule', 'View FieldOfStudyRule'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 class GradeRule(Rule):
@@ -286,10 +309,16 @@ class GradeRule(Rule):
         permissions = (
             ('view_graderule', 'View GradeRule'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 class UserGroupRule(Rule):
-    group = models.ForeignKey(Group, blank=False, null=False)
+    group = models.ForeignKey(
+        Group,
+        blank=False,
+        null=False,
+        on_delete=models.CASCADE
+    )
 
     def satisfied(self, user, registration_start):
         """ Override method """
@@ -319,6 +348,7 @@ class UserGroupRule(Rule):
         permissions = (
             ('view_usergrouprule', 'View UserGroupRule'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 class RuleBundle(models.Model):
@@ -337,7 +367,8 @@ class RuleBundle(models.Model):
         rules.extend(self.user_group_rules.all())
         return rules
 
-    def get_rule_strings(self):
+    @property
+    def rule_strings(self):
         return [str(rule) for rule in self.get_all_rules()]
 
     def satisfied(self, user, registration_start):
@@ -356,8 +387,8 @@ class RuleBundle(models.Model):
     def __str__(self):
         if self.description:
             return self.description
-        elif self.get_rule_strings():
-            return ", ".join(self.get_rule_strings())
+        elif self.rule_strings:
+            return ", ".join(self.rule_strings)
         else:
             return _("Tom rule bundle.")
 
@@ -365,6 +396,7 @@ class RuleBundle(models.Model):
         permissions = (
             ('view_rulebundle', 'View RuleBundle'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 """
@@ -387,6 +419,7 @@ class Extras(models.Model):
         verbose_name = _("ekstra valg")
         verbose_name_plural = _("ekstra valg")
         ordering = ['choice']
+        default_permissions = ('add', 'change', 'delete')
 
 
 class AttendanceEvent(models.Model):
@@ -396,8 +429,9 @@ class AttendanceEvent(models.Model):
     event = models.OneToOneField(
         Event,
         primary_key=True,
-        related_name='attendance_event')
-
+        related_name='attendance_event',
+        on_delete=models.CASCADE
+    )
     max_capacity = models.PositiveIntegerField(_('maks-kapasitet'), null=False, blank=False)
     waitlist = models.BooleanField(_('venteliste'), default=False)
     guest_attendance = models.BooleanField(_('gjestepåmelding'), null=False, blank=False, default=False)
@@ -644,7 +678,7 @@ class AttendanceEvent(models.Model):
         # Is suspended
         if self.is_suspended(user):
             response['status'] = False
-            response['message'] = _("Du er suspandert og kan ikke melde deg på.")
+            response['message'] = _("Du er suspendert og kan ikke melde deg på.")
             response['status_code'] = 402
 
             return response
@@ -765,7 +799,7 @@ class AttendanceEvent(models.Model):
         except MultipleObjectsReturned:
             import logging
             logger = logging.getLogger(__name__)
-            logger.warn("Multiple payment objects connected to attendance event #%s." % self.pk)
+            logger.warning("Multiple payment objects connected to attendance event #%s." % self.pk)
             return self.get_payments()  # Sneaky hack, however, use get_payments for multiple
 
     def __str__(self):
@@ -806,14 +840,24 @@ class AttendanceEvent(models.Model):
         permissions = (
             ('view_attendanceevent', 'View AttendanceEvent'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 class CompanyEvent(models.Model):
     """
     Company relation to AttendanceEvent
     """
-    company = models.ForeignKey(Company, verbose_name=_('bedrifter'))
-    event = models.ForeignKey(Event, verbose_name=_('arrangement'), related_name='companies')
+    company = models.ForeignKey(
+        Company,
+        verbose_name=_('bedrifter'),
+        on_delete=models.CASCADE
+    )
+    event = models.ForeignKey(
+        Event,
+        verbose_name=_('arrangement'),
+        related_name='companies',
+        on_delete=models.CASCADE
+    )
 
     def save(self, force_insert=False, force_update=False, using=None,
              update_fields=None):
@@ -830,20 +874,21 @@ class CompanyEvent(models.Model):
             ('view_companyevent', 'View CompanyEvent'),
         )
         ordering = ('company',)
+        default_permissions = ('add', 'change', 'delete')
 
 
 class Attendee(models.Model):
     """
     User relation to AttendanceEvent.
     """
-    event = models.ForeignKey(AttendanceEvent, related_name="attendees")
-    user = models.ForeignKey(User)
+    event = models.ForeignKey(AttendanceEvent, related_name="attendees", on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
 
     timestamp = models.DateTimeField(auto_now_add=True, editable=False)
     attended = models.BooleanField(_('var tilstede'), default=False)
     paid = models.BooleanField(_('har betalt'), default=False)
     note = models.CharField(_('notat'), max_length=100, blank=True, default='')
-    extras = models.ForeignKey(Extras, blank=True, null=True)
+    extras = models.ForeignKey(Extras, blank=True, null=True, on_delete=models.CASCADE)
 
     show_as_attending_event = models.BooleanField(_('vis som påmeldt arrangementet'), default=False)
 
@@ -854,7 +899,7 @@ class Attendee(models.Model):
         # Importing here to prevent circular dependencies
         from apps.payment.models import PaymentDelay
         try:
-            PaymentDelay.objects.filter(user=self.user, payment=self.event.payment()).delete()
+            PaymentDelay.objects.get(user=self.user, payment=self.event.payment()).delete()
         except PaymentDelay.DoesNotExist:
             # Do nothing
             False
@@ -864,8 +909,42 @@ class Attendee(models.Model):
 
         super(Attendee, self).delete()
 
+    def get_payment_deadline(self):
+        # Importing here to prevent circular dependencies
+        from apps.payment.models import PaymentDelay
+        try:
+            deadline = PaymentDelay.objects.get(user=self.user, payment=self.event.payment()).valid_to
+        except PaymentDelay.DoesNotExist:
+            return "Betalt"
+        return deadline
+
     def is_on_waitlist(self):
         return self in self.event.waitlist_qs
+
+    # Unattend user from event
+    def unattend(self, admin_user):
+        logger = logging.getLogger(__name__)
+        logger.info('User %s was removed from event "%s" by %s on %s' %
+                    (self.user.get_full_name(), self.event, admin_user, datetime.now()))
+
+        # Notify responsible group if someone is unattended after deadline
+        if timezone.now() >= self.event.unattend_deadline:
+            subject = '[%s] %s har blitt avmeldt arrangementet av %s' % (self.event, self.user.get_full_name(),
+                                                                         admin_user)
+
+            content = render_to_string('events/email/unattend.txt', {
+                'user': self.user.get_full_name(),
+                'user_id': self.user_id,
+                'event': self.event,
+                'admin': admin_user,
+                'admin_id': admin_user.id,
+                'time': timezone.now().strftime('%d. %b %H:%M:%S')
+            })
+
+            to_email = self.event.event.feedback_mail()
+            EmailMessage(subject, content, "online@online.ntnu.no", [to_email]).send()
+
+        self.delete()
 
     def save(self, force_insert=False, force_update=False, using=None,
              update_fields=None):
@@ -881,10 +960,11 @@ class Attendee(models.Model):
         permissions = (
             ('view_attendee', 'View Attendee'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 class Reservation(models.Model):
-    attendance_event = models.OneToOneField(AttendanceEvent, related_name="reserved_seats")
+    attendance_event = models.OneToOneField(AttendanceEvent, related_name="reserved_seats", on_delete=models.CASCADE)
     seats = models.PositiveIntegerField("reserverte plasser", blank=False, null=False)
 
     @property
@@ -910,13 +990,14 @@ class Reservation(models.Model):
         permissions = (
             ('view_reservation', 'View Reservation'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 class Reservee(models.Model):
     """
     Reservation entry
     """
-    reservation = models.ForeignKey(Reservation, related_name='reservees')
+    reservation = models.ForeignKey(Reservation, related_name='reservees', on_delete=models.CASCADE)
     # I 2014 var norges lengste navn på 69 tegn;
     # julius andreas gimli arn macgyver chewbacka highlander elessar-jankov
     name = models.CharField('navn', max_length=69)
@@ -941,13 +1022,16 @@ class Reservee(models.Model):
         permissions = (
             ('view_reservee', 'View Reservee'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 class GroupRestriction(models.Model):
     event = models.OneToOneField(
         Event,
         primary_key=True,
-        related_name='group_restriction')
+        related_name='group_restriction',
+        on_delete=models.CASCADE
+    )
 
     groups = models.ManyToManyField(Group, blank=True,
                                     help_text=_('Legg til de gruppene som skal ha tilgang til arrangementet'))
@@ -962,3 +1046,4 @@ class GroupRestriction(models.Model):
         permissions = (
             ('view_restriction', 'View Restriction'),
         )
+        default_permissions = ('add', 'change', 'delete')

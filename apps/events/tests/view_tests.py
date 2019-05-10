@@ -3,15 +3,15 @@ from datetime import timedelta
 
 from django.contrib.auth.models import Group
 from django.core import mail
-from django.core.urlresolvers import reverse
 from django.test import TestCase, override_settings
+from django.urls import reverse
 from django.utils import timezone
 from django_dynamic_fixture import G
 from freezegun import freeze_time
 from rest_framework import status
 
 from apps.authentication.models import AllowedUsername
-from apps.payment.models import PaymentDelay
+from apps.payment.models import PaymentDelay, PaymentPrice
 
 from ..models import TYPE_CHOICES, AttendanceEvent, Event, Extras, GroupRestriction
 from .utils import (add_payment_delay, add_to_arrkom, add_to_bedkom, add_to_trikom,
@@ -67,6 +67,17 @@ class EventsDetailRestricted(EventsTestMixin, TestCase):
         add_to_trikom(self.user)
         arrkom = Group.objects.get(name__iexact='arrkom')
         G(GroupRestriction, event=self.event, groups=[arrkom])
+
+        response = self.client.get(self.event_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertInMessages(
+            "Du har ikke tilgang til dette arrangementet.", response)
+
+    def test_group_hidden_no_access(self):
+        self.event = G(Event, visible=False)
+        self.event_url = reverse(
+            'events_details', args=(self.event.id, self.event.slug))
 
         response = self.client.get(self.event_url)
 
@@ -336,7 +347,8 @@ class EventsAttend(EventsTestMixin, TestCase):
         G(AttendanceEvent, event=event,
             registration_start=timezone.now() - timedelta(days=1),
             registration_end=timezone.now() + timedelta(days=1))
-        generate_payment(event, payment_type=3, delay=timedelta(days=2))
+        self.event_payment = generate_payment(event, payment_type=3, delay=timedelta(days=2))
+        G(PaymentPrice, price=200, payment=self.event_payment)
         url = reverse('attend_event', args=(event.id,))
         # django-recatpcha magic when RECAPTCHA_TESTING=True
         form_params = {'g-recaptcha-response': 'PASSED'}

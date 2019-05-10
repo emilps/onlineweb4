@@ -5,17 +5,17 @@ from django import forms
 from apps.dashboard.forms import HTML5RequiredMixin
 from apps.dashboard.widgets import DatePickerInput, DatetimePickerInput, multiple_widget_generator
 from apps.events.models import AttendanceEvent, CompanyEvent, Event, Reservation
-from apps.feedback.models import FeedbackRelation
+from apps.feedback.models import Feedback, FeedbackRelation
 from apps.gallery.widgets import SingleImageInput
 from apps.payment.models import Payment, PaymentPrice
 
 
 class CreateEventForm(forms.ModelForm, HTML5RequiredMixin):
-    class Meta(object):
+    class Meta:
         model = Event
         fields = (
             'title', 'event_start', 'event_end', 'location', 'ingress_short', 'ingress', 'description', 'event_type',
-            'image', 'organizer',
+            'image', 'organizer', 'visible',
         )
 
         img_fields = [('image', {'id': 'responsive-image-id'})]
@@ -31,7 +31,7 @@ class CreateEventForm(forms.ModelForm, HTML5RequiredMixin):
 
 
 class CreateAttendanceEventForm(forms.ModelForm, HTML5RequiredMixin):
-    class Meta(object):
+    class Meta:
         model = AttendanceEvent
         fields = (
             'max_capacity', 'registration_start', 'registration_end',
@@ -50,7 +50,7 @@ class CreateAttendanceEventForm(forms.ModelForm, HTML5RequiredMixin):
 
 
 class AddCompanyForm(forms.ModelForm):
-    class Meta(object):
+    class Meta:
         model = CompanyEvent
         fields = ('company',)
 
@@ -61,7 +61,7 @@ class ChangeEventForm(forms.ModelForm, HTML5RequiredMixin):
         model = Event
         fields = (
             'title', 'event_type', 'event_start', 'event_end', 'location', 'ingress_short', 'ingress', 'description',
-            'image'
+            'image', 'visible',
         )
 
         dtp_fields = [('event_start', {}), ('event_end', {})]
@@ -94,7 +94,13 @@ class ChangeAttendanceEventForm(forms.ModelForm, HTML5RequiredMixin):
 
 
 class CreateFeedbackRelationForm(forms.ModelForm, HTML5RequiredMixin):
-    class Meta(object):
+
+    def __init__(self, *args, **kwargs):
+        super(CreateFeedbackRelationForm, self).__init__(*args, **kwargs)
+        feedback = Feedback.objects.filter(available=True)
+        self.fields['feedback'].queryset = feedback
+
+    class Meta:
         model = FeedbackRelation
         fields = ('feedback', 'deadline', 'gives_mark')
 
@@ -106,7 +112,7 @@ class CreateFeedbackRelationForm(forms.ModelForm, HTML5RequiredMixin):
 
 
 class CreatePaymentForm(forms.ModelForm, HTML5RequiredMixin):
-    class Meta(object):
+    class Meta:
         model = Payment
         fields = ('stripe_key', 'payment_type', 'deadline', 'delay')
 
@@ -118,7 +124,7 @@ class CreatePaymentForm(forms.ModelForm, HTML5RequiredMixin):
 
 
 class CreatePaymentPriceForm(forms.ModelForm, HTML5RequiredMixin):
-    class Meta(object):
+    class Meta:
         model = PaymentPrice
         fields = ('price', 'description')
 

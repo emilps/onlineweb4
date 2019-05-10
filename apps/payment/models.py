@@ -36,7 +36,7 @@ class Payment(models.Model):
         ('fagkom', 'fagkom'),
     )
 
-    content_type = models.ForeignKey(ContentType)
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     """Which model the payment is created for. For attendance events this should be attendance_event(påmelding)."""
     object_id = models.PositiveIntegerField()
     """Object id for the model chosen in content_type."""
@@ -73,7 +73,12 @@ class Payment(models.Model):
     """Day of payment creation. Automatically set"""
     changed_date = models.DateTimeField(auto_now=True, editable=False)
     """Last changed. Automatically set"""
-    last_changed_by = models.ForeignKey(User, editable=False, null=True)  # Blank and null is temperarly
+    last_changed_by = models.ForeignKey(  # Blank and null is temperarly
+        User,
+        editable=False,
+        null=True,
+        on_delete=models.CASCADE
+    )
     """User who last changed payment. Automatically set"""
 
     def payment_delays(self):
@@ -180,7 +185,7 @@ class Payment(models.Model):
         if self._is_type(AttendanceEvent):
             attendance_event = self.content_object
             if attendance_event.unattend_deadline < timezone.now():
-                return False, _("Fristen for og melde seg av har utgått")
+                return False, _("Fristen for å melde seg av har utgått")
             if len(Attendee.objects.filter(event=attendance_event, user=payment_relation.user)) == 0:
                 return False, _("Du er ikke påmeldt dette arrangementet.")
             if attendance_event.event.event_start < timezone.now():
@@ -218,15 +223,17 @@ class Payment(models.Model):
         super().clean()
         self.clean_generic_relation()
 
-    class Meta(object):
+    class Meta:
         unique_together = ('content_type', 'object_id')
 
         verbose_name = _("betaling")
         verbose_name_plural = _("betalinger")
 
+        default_permissions = ('add', 'change', 'delete')
+
 
 class PaymentPrice(models.Model):
-    payment = models.ForeignKey(Payment)
+    payment = models.ForeignKey(Payment, on_delete=models.CASCADE)
     """Payment object"""
     price = models.IntegerField(_("pris"))
     """Price in NOK"""
@@ -236,19 +243,20 @@ class PaymentPrice(models.Model):
     def __str__(self):
         return self.description + " (" + str(self.price) + "kr)"
 
-    class Meta(object):
+    class Meta:
         verbose_name = _("pris")
         verbose_name_plural = _("priser")
+        default_permissions = ('add', 'change', 'delete')
 
 
 class PaymentRelation(models.Model):
     """Payment metadata for user"""
 
-    payment = models.ForeignKey(Payment)
+    payment = models.ForeignKey(Payment, on_delete=models.CASCADE)
     """Payment object"""
-    payment_price = models.ForeignKey(PaymentPrice)
+    payment_price = models.ForeignKey(PaymentPrice, on_delete=models.CASCADE)
     """Price object"""
-    user = models.ForeignKey(User)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     """User who paid"""
     datetime = models.DateTimeField(auto_now=True)
     """Datetime when payment was created"""
@@ -294,16 +302,17 @@ class PaymentRelation(models.Model):
     def __str__(self):
         return self.payment.description() + " - " + str(self.user)
 
-    class Meta(object):
+    class Meta:
         verbose_name = _("betalingsrelasjon")
         verbose_name_plural = _("betalingsrelasjoner")
+        default_permissions = ('add', 'change', 'delete')
 
 
 class PaymentDelay(models.Model):
     """User specific payment deadline"""
-    payment = models.ForeignKey(Payment)
+    payment = models.ForeignKey(Payment, on_delete=models.CASCADE)
     """Payment object"""
-    user = models.ForeignKey(User)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     """User object"""
     valid_to = models.DateTimeField()
     """Payment deadline"""
@@ -314,16 +323,18 @@ class PaymentDelay(models.Model):
     def __str__(self):
         return self.payment.description() + " - " + str(self.user)
 
-    class Meta(object):
+    class Meta:
         unique_together = ('payment', 'user')
 
         verbose_name = _('betalingsutsettelse')
         verbose_name_plural = _('betalingsutsettelser')
 
+        default_permissions = ('add', 'change', 'delete')
+
 
 class PaymentTransaction(models.Model):
     """Transaction for a user"""
-    user = models.ForeignKey(User)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     """User object"""
     amount = models.IntegerField(null=True, blank=True)
     """Amount in NOK"""
@@ -375,6 +386,7 @@ class PaymentTransaction(models.Model):
         ordering = ['-datetime']
         verbose_name = _('transaksjon')
         verbose_name_plural = _('transaksjoner')
+        default_permissions = ('add', 'change', 'delete')
 
 
 class PaymentReceipt(models.Model):
@@ -432,3 +444,6 @@ class PaymentReceipt(models.Model):
 
         email_message = render_to_string('payment/email/confirmation_mail.txt', context)
         send_mail(subject, email_message, from_mail, to_mail)
+
+    class Meta:
+        default_permissions = ('add', 'change', 'delete')

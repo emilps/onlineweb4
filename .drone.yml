@@ -1,91 +1,112 @@
-pipeline:
-  restore-cache:
+kind: pipeline
+name: default
+
+steps:
+  - name: restore-cache
     image: drillster/drone-volume-cache
     when:
-      event: push
-    restore: true
-    mount:
-      - ./.tox
-      - ./node_modules
-    volumes:
-      - /tmp/cache:/cache
+      event:
+        - push
+    settings:
+      restore: true
+      mount:
+        - ./.tox
+        - ./node_modules
+      volumes:
+        - /tmp/cache:/cache
 
-  setup:
-    image: registry.online.ntnu.no/dotkom/onlineweb4-testbase
+  - name: setup
+    image: registry.online.ntnu.no/dotkom/onlineweb4-testbase:3.7
     pull: true
     when:
-      event: push
+      event:
+        - push
     commands:
       - cp onlineweb4/settings/example-local.py onlineweb4/settings/local.py
       - yarn install --pure-lockfile
       - pip install tox
 
-  npm-build:
-    image: registry.online.ntnu.no/dotkom/onlineweb4-testbase
+  - name: npm-build
+    image: registry.online.ntnu.no/dotkom/onlineweb4-testbase:3.7
     when:
-      event: push
+      event:
+        - push
     group: testing
     commands:
       - npm run build:prod
 
-  js-lint:
-    image: registry.online.ntnu.no/dotkom/onlineweb4-testbase
+  - name: js-lint
+    image: registry.online.ntnu.no/dotkom/onlineweb4-testbase:3.7
     when:
-      event: push
+      event:
+        - push
     group: testing
     commands:
       - npm run lint-js
 
-  less-lint:
-    image: registry.online.ntnu.no/dotkom/onlineweb4-testbase
+  - name: less-lint
+    image: registry.online.ntnu.no/dotkom/onlineweb4-testbase:3.7
     when:
-      event: push
+      event:
+        - push
     group: testing
     commands:
       - npm run lint-less
 
-  python-lint:
-    image: registry.online.ntnu.no/dotkom/onlineweb4-testbase
+  - name: python-lint
+    image: registry.online.ntnu.no/dotkom/onlineweb4-testbase:3.7
     when:
-      event: push
+      event:
+        - push
     group: testing
     commands:
-      - tox -e flake8 -e isort
+      - tox -e flake8 -e isort --recreate
 
-  python-tests:
-    image: registry.online.ntnu.no/dotkom/onlineweb4-testbase
-    secrets: [codecov_token]
+  - name: python-tests
+    image: registry.online.ntnu.no/dotkom/onlineweb4-testbase:3.7
+    secrets:
+      - codecov_token
+    environment:
+      CODECOV_TOKEN:
+        from_secret: codecov_token
     when:
-      event: push
+      event:
+        - push
     group: testing
     commands:
       - tox -e tests --recreate
       - pip install codecov --quiet
       - codecov
 
-  rebuild-cache:
+  - name: rebuild-cache
     image: drillster/drone-volume-cache
     when:
-      event: push
-    rebuild: true
-    mount:
-      - ./.tox
-      - ./node_modules
-    volumes:
-      - /tmp/cache:/cache
+      event:
+        - push
+    settings:
+      rebuild: true
+      mount:
+        - ./.tox
+        - ./node_modules
+      volumes:
+        - /tmp/cache:/cache
 
-  deploy:
+  - name: deploy
     image: appleboy/drone-ssh
     pull: true
-    secrets: [ssh_key]
-    host: nansen.online.ntnu.no
-    port: 22
-    username: root
-    key: ${SSH_KEY}
-    command_timeout: 600
+    secrets:
+      - ssh_key
     when:
-      event: push
+      event:
+        - push
       branch: develop
       status: success
-    script:
-      - /srv/www/ow4dev/deploy.sh
+    settings:
+      host: nansen.online.ntnu.no
+      port: 22
+      username: root
+      key:
+        from_secret: ssh_key
+      command_timeout: 600s
+      script:
+        - /srv/www/ow4dev/deploy.sh

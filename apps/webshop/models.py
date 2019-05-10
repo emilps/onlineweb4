@@ -2,9 +2,9 @@
 
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
-from django.core.urlresolvers import reverse
-from django.core.validators import MinValueValidator
+from django.core.validators import MinValueValidator, validate_comma_separated_integer_list
 from django.db import models
+from django.urls import reverse
 from django.utils import timezone
 
 from apps.authentication.models import OnlineUser as User
@@ -13,12 +13,18 @@ from apps.payment.models import PaymentReceipt
 
 
 class Product(models.Model):
-    category = models.ForeignKey('Category', related_name='products')
+    category = models.ForeignKey('Category', related_name='products', on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
     slug = models.SlugField(unique=True)
     short = models.CharField(max_length=200)
     description = models.TextField()
-    images_csv = models.CommaSeparatedIntegerField(max_length=200, default=None, blank=True, null=True)
+    images_csv = models.CharField(
+        validators=[validate_comma_separated_integer_list],
+        max_length=200,
+        default=None,
+        blank=True,
+        null=True,
+    )
 
     price = models.DecimalField(max_digits=10, decimal_places=2)
     stock = models.PositiveSmallIntegerField(
@@ -102,6 +108,7 @@ class Product(models.Model):
         permissions = (
             ('view_product', 'View Product'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 class Category(models.Model):
@@ -120,10 +127,11 @@ class Category(models.Model):
         permissions = (
             ('view_category', 'View Category'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 class ProductSize(models.Model):
-    product = models.ForeignKey(Product, related_name='product_sizes')
+    product = models.ForeignKey(Product, related_name='product_sizes', on_delete=models.CASCADE)
     size = models.CharField('Størrelse', max_length=25)
     description = models.CharField('Beskrivelse', max_length=50, null=True, blank=True)
     stock = models.PositiveSmallIntegerField(
@@ -138,16 +146,17 @@ class ProductSize(models.Model):
     class Meta:
         verbose_name = 'Størrelse'
         verbose_name_plural = 'Størrelser'
+        default_permissions = ('add', 'change', 'delete')
 
 
 class Order(models.Model):
-    product = models.ForeignKey('Product')
-    order_line = models.ForeignKey('OrderLine', related_name='orders')
+    product = models.ForeignKey('Product', on_delete=models.CASCADE)
+    order_line = models.ForeignKey('OrderLine', related_name='orders', on_delete=models.CASCADE)
     # Price of product when paid
     price = models.DecimalField(max_digits=10, decimal_places=2, blank=True)
     # Quantity of products ordered
     quantity = models.PositiveIntegerField(default=1, validators=[MinValueValidator(1)])
-    size = models.ForeignKey(ProductSize, null=True, blank=True)
+    size = models.ForeignKey(ProductSize, null=True, blank=True, on_delete=models.CASCADE)
 
     def is_valid(self):
         """Validate order
@@ -176,10 +185,11 @@ class Order(models.Model):
         permissions = (
             ('view_order', 'View Order'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 class OrderLine(models.Model):
-    user = models.ForeignKey(User)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     datetime = models.DateTimeField(null=True, blank=True)
     paid = models.BooleanField(default=False)
     stripe_id = models.CharField(max_length=50, null=True, blank=True)
@@ -275,3 +285,4 @@ class OrderLine(models.Model):
         permissions = (
             ('view_order_line', 'View Order Line'),
         )
+        default_permissions = ('add', 'change', 'delete')

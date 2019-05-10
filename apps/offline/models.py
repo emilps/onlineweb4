@@ -12,7 +12,7 @@ IMAGE_FOLDER = "images/offline"
 
 
 class ProxyChunk(Chunk):
-    class Meta(object):
+    class Meta:
         proxy = True
         verbose_name = 'Informasjonstekst'
         verbose_name_plural = 'Informasjonstekster'
@@ -60,10 +60,11 @@ class Issue(models.Model):
     def thumbnail_exists(self):
         return path.exists(self.thumbnail)
 
-    class Meta(object):
+    class Meta:
         verbose_name = 'Utgivelse'
         verbose_name_plural = 'Utgivelser'
         ordering = ['-release_date']
         permissions = (
             ('view_issue', 'View Issue'),
         )
+        default_permissions = ('add', 'change', 'delete')

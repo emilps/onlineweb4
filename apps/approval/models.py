@@ -18,7 +18,8 @@ class Approval(models.Model):
         User,
         verbose_name=_("søker"),
         related_name="applicant",
-        editable=True
+        editable=True,
+        on_delete=models.CASCADE
     )
     approver = models.ForeignKey(
         User,
@@ -26,13 +27,17 @@ class Approval(models.Model):
         related_name="approver",
         blank=True,
         null=True,
-        editable=False
+        editable=False,
+        on_delete=models.CASCADE
     )
     created = models.DateTimeField(_("opprettet"), auto_now_add=True)
     processed = models.BooleanField(_("behandlet"), default=False, editable=False)
     processed_date = models.DateTimeField(_("behandlet dato"), blank=True, null=True)
     approved = models.BooleanField(_("godkjent"), default=False, editable=False)
     message = models.TextField(_("melding"))
+
+    class Meta:
+        default_permissions = ('add', 'change', 'delete')
 
 
 class MembershipApproval(Approval):
@@ -76,6 +81,7 @@ class MembershipApproval(Approval):
         permissions = (
             ('view_membershipapproval', 'View membership approval'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 class CommitteeApplication(models.Model):
@@ -107,7 +113,7 @@ class CommitteeApplication(models.Model):
     def __str__(self):
         return '{created}: {applicant}'.format(applicant=self.get_name(), created=self.created.strftime('%Y-%m-%d'))
 
-    class Meta(object):
+    class Meta:
         default_permissions = ('add', 'change', 'delete', 'view')
         verbose_name = 'komitesøknad'
         verbose_name_plural = 'komitesøknader'
@@ -126,7 +132,7 @@ class CommitteePriority(models.Model):
             return '{committee}: {priority}'.format(committee=self.group, priority=self.get_priority_display())
         return "{committee}".format(committee=self.group)
 
-    class Meta(object):
+    class Meta:
         default_permissions = ('add', 'change', 'delete', 'view')
         verbose_name = 'komiteprioritering'
         verbose_name_plural = 'komiteprioriteringer'

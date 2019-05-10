@@ -8,9 +8,9 @@ from apps.inventory.models import Batch, Item, ItemCategory
 
 class ItemForm(forms.ModelForm):
 
-    class Meta(object):
+    class Meta:
         model = Item
-        fields = ('name', 'description', 'category', 'available', 'price', 'image')
+        fields = ('name', 'description', 'category', 'available', 'price', 'low_stock_treshold', 'image')
 
         # Widget generator accepts a form widget, and a list of tuples between field name and an attribute dict
         widgets = widget_generator(SingleImageInput, [('image', {'id': 'responsive-image-id'})])
@@ -18,13 +18,13 @@ class ItemForm(forms.ModelForm):
 
 class CategoryForm(forms.ModelForm):
 
-    class Meta(object):
+    class Meta:
         model = ItemCategory
         fields = ('name', )
 
 
 class BatchForm(forms.ModelForm):
 
-    class Meta(object):
+    class Meta:
         model = Batch
         exclude = ['item']

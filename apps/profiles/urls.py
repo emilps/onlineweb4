@@ -2,7 +2,10 @@
 
 from django.conf.urls import url
 
+from apps.api.utils import SharedAPIRootRouter
+from apps.marks.views import MarksViewSet, SuspensionViewSet
 from apps.profiles import views
+from apps.shop.views import UserOrderViewSet
 
 urlpatterns = [
     url(r'^$', views.index, name='profiles'),
@@ -40,3 +43,12 @@ urlpatterns = [
     # Profile index with active tab.
     url(r'^(?P<active_tab>\w+)/$', views.index, name='profiles_active'),
 ]
+
+router = SharedAPIRootRouter()
+router.register('profile/search', views.PublicProfileSearchSet, base_name='profile-search')
+router.register('profile/orders', UserOrderViewSet, base_name='profile-orders')
+router.register('profile/privacy', views.PersonalPrivacyView, base_name='profile-privacy')
+router.register('profile/marks', MarksViewSet, base_name='profile-marks')
+router.register('profile/suspensions', SuspensionViewSet, base_name='profile-suspensions')
+router.register('profile/emails', views.UserEmailAddressesViewSet, base_name='profile-emails')
+router.register('profile', views.ProfileViewSet, base_name='profile')

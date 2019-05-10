@@ -10,8 +10,10 @@ from django.core.exceptions import ImproperlyConfigured
 from django.core.mail import EmailMessage, send_mail
 from django.core.signing import BadSignature, Signer
 from django.http import HttpResponse
+from django.template.loader import render_to_string
 from django.utils import timezone
 from filebrowser.settings import VERSIONS
+from pytz import timezone as tz
 
 from apps.authentication.models import OnlineUser as User
 from apps.events.models import TYPE_CHOICES, Attendee, Event, Extras
@@ -37,6 +39,7 @@ def get_types_allowed(user):
         if group.name == 'Hovedstyret' or group.name == 'dotKom':
             types_allowed = [i + 1 for i in range(len(TYPE_CHOICES))]  # full access
             return types_allowed
+
         if group.name == 'arrKom':
             types_allowed.append(1)  # sosialt
             types_allowed.append(4)  # utflukt
@@ -49,6 +52,9 @@ def get_types_allowed(user):
 
         if group.name == 'eksKom':
             types_allowed.append(5)  # ekskursjon
+
+        if group.name == 'Realfagskjelleren':
+            types_allowed.append(8)  # Realfagskjelleren
 
     return types_allowed
 
@@ -81,7 +87,7 @@ def _handle_waitlist_bump_payment(payment, attendees):
 
     elif payment.payment_type == 2:  # Deadline
         if payment.deadline > extended_deadline:  # More than 2 days left of payment deadline
-            message += "Dette arrangementet krever betaling og fristen for og betale er %s" \
+            message += "Dette arrangementet krever betaling og fristen for å betale er %s" \
                        % (payment.deadline.strftime('%-d %B %Y kl. %H:%M'))
         else:  # The deadline is in less than 2 days
             for attendee in attendees:
@@ -212,9 +218,9 @@ def handle_attendance_event_detail(event, user, context):
 
     if attendance_event.rule_bundles:
         for rule_bundle in attendance_event.rule_bundles.all():
-            rules.append(rule_bundle.get_rule_strings)
+            rules.append(rule_bundle.rule_strings)
 
-    if user.is_authenticated():
+    if user.is_authenticated:
         user_anonymous = False
         if attendance_event.is_attendee(user):
             user_attending = True
@@ -263,7 +269,7 @@ def handle_event_payment(event, user, payment, context):
         'payment_relation_id': payment_relation_id,
     })
 
-    if not user.is_authenticated():  # Return early if user not logged in, can't filter payment relations against no one
+    if not user.is_authenticated:  # Return early if user not logged in, can't filter payment relations against no one
         return context
 
     payment_relations = PaymentRelation.objects.filter(payment=payment, user=user, refunded=False)
@@ -330,10 +336,22 @@ def handle_attend_event_payment(event, user):
         if payment.payment_type == 3:
             deadline = timezone.now() + payment.delay
             payment.create_payment_delay(user, deadline)
-            # TODO send mail
+        else:
+            deadline = payment.deadline
+
+        # Send notification about payment to user by mail
+        subject = '[%s] Husk å betale for å fullføre påmeldingen til arrangementet.' % event.title
+
+        content = render_to_string('events/email/payment_reminder.txt', {
+            'event': event.title,
+            'time': deadline.astimezone(tz('Europe/Oslo')).strftime("%-d %B %Y kl. %H:%M"),
+            'price': payment.price().price
+        })
+
+        EmailMessage(subject, content, event.feedback_mail(), [user.get_email().email]).send()
 
 
-def handle_mail_participants(event, _from_email, _to_email_value, subject, _message,
+def handle_mail_participants(event, _from_email, _to_email_value, subject, _message, _images,
                              all_attendees, attendees_on_waitlist, attendees_not_paid):
     logger = logging.getLogger(__name__)
 
@@ -372,7 +390,14 @@ def handle_mail_participants(event, _from_email, _to_email_value, subject, _mess
     # Send mail
     try:
         email_addresses = [a.user.get_email().email for a in send_to_users]
-        _email_sent = EmailMessage(str(subject), str(message), from_email, [from_email], email_addresses).send()
+        _email_sent = EmailMessage(
+            str(subject),
+            str(message),
+            from_email,
+            [from_email],
+            email_addresses,
+            attachments=(_images)
+        ).send()
         logger.info('Sent mail to %s for event "%s".' % (_to_email_options[_to_email_value][1], event))
         return _email_sent, all_attendees, attendees_on_waitlist, attendees_not_paid
     except ImproperlyConfigured as e:
@@ -396,6 +421,8 @@ def get_organizer_by_event_type(event_type):
             return Group.objects.get(name__iexact='arrkom')
         elif event_type == TYPE_CHOICES[7][0]:
             return Group.objects.get(name__iexact='trikom')
+        elif event_type == TYPE_CHOICES[8][0]:
+            return Group.objects.get(name__iexact='Realfagskjelleren')
     except Group.DoesNotExist:
         logger.warning('Group for event type "{}" does not exist.'.format(event_type))
 

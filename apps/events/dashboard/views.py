@@ -7,10 +7,10 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied
-from django.core.urlresolvers import reverse
 from django.forms.models import modelformset_factory
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import ugettext as _
 from django.views.generic import CreateView, DeleteView, UpdateView
@@ -22,7 +22,6 @@ from apps.dashboard.tools import (DashboardCreatePermissionMixin, DashboardObjec
 from apps.events.dashboard import forms as dashboard_forms
 from apps.events.dashboard.utils import event_ajax_handler
 from apps.events.models import AttendanceEvent, Attendee, CompanyEvent, Event, Reservation, Reservee
-from apps.events.utils import get_types_allowed
 from apps.feedback.models import FeedbackRelation
 from apps.payment.models import Payment, PaymentPrice, PaymentRelation
 
@@ -55,46 +54,6 @@ def past(request):
     context['events'] = events
 
     return render(request, 'events/dashboard/index.html', context)
-
-
-@login_required
-@permission_required('events.view_event', return_403=True)
-def create_event(request):
-    if not has_access(request):
-        raise PermissionDenied
-
-    context = get_base_context(request)
-
-    if request.method == 'POST':
-        form = dashboard_forms.ChangeEventForm(request.POST)
-        if form.is_valid():
-            cleaned = form.cleaned_data
-
-            if cleaned['event_type'] not in get_types_allowed(request.user):
-                messages.error(request, _(
-                    "Du har ikke tilgang til å lage arranngement av typen '%s'.") % cleaned['event_type'])
-                context['change_event_form'] = form
-
-            else:
-                # Create object, but do not commit to db. We need to add stuff.
-                event = form.save(commit=False)
-                # Add author
-                event.author = request.user
-                event.save()
-
-                messages.success(request, _("Arrangementet ble opprettet."))
-                return redirect('dashboard_event_details', event_id=event.id)
-
-        else:
-            context['change_event_form'] = form
-
-    if 'change_event_form' not in context.keys():
-        context['change_event_form'] = dashboard_forms.ChangeEventForm()
-
-    context['event'] = _('Nytt arrangement')
-    context['active_tab'] = 'details'
-
-    return render(request, 'events/dashboard/details.html', context)
 
 
 class CreateEventView(DashboardCreatePermissionMixin, CreateView):
@@ -416,7 +375,7 @@ def count_extras(event_extras, attendance_list, attendees):
         ex = event_extras[choice]
         ex[attendance_list] += 1
         if attendee.user.allergies:
-            what_list = "påmeldt" if attendance_list is "attending" else "venteliste"
+            what_list = "påmeldt" if attendance_list == "attending" else "venteliste"
             ex["allergics"].append({"user": attendee.user, "list": what_list})
 
 

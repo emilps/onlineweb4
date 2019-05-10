@@ -15,8 +15,8 @@ import uuid
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
-from django.core.urlresolvers import reverse
 from django.db import IntegrityError, models
+from django.urls import reverse
 from django.utils.translation import ugettext as _
 
 from apps.authentication.models import FIELD_OF_STUDY_CHOICES
@@ -28,8 +28,8 @@ class FeedbackRelation(models.Model):
     """
     A many to many relation between a Generic Object and a Feedback schema.
     """
-    feedback = models.ForeignKey('Feedback', verbose_name=_('Tilbakemeldingskjema'))
-    content_type = models.ForeignKey(ContentType)
+    feedback = models.ForeignKey('Feedback', verbose_name=_('Tilbakemeldingskjema'), on_delete=models.CASCADE)
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField()
     content_object = GenericForeignKey()
     deadline = models.DateField(_('Tidsfrist'))
@@ -46,12 +46,13 @@ class FeedbackRelation(models.Model):
         related_name='feedbacks',
         blank=True)
 
-    class Meta(object):
+    class Meta:
         unique_together = ('feedback', 'content_type', 'object_id')
 
         permissions = (
             ('view_feedbackrelation', 'View FeedbackRelation'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
         verbose_name = _('tilbakemelding')
         verbose_name_plural = _('tilbakemeldinger')
@@ -181,7 +182,7 @@ class Feedback(models.Model):
     A customizable Feedback schema.
     """
     feedback_id = models.AutoField(primary_key=True)
-    author = models.ForeignKey(User)
+    author = models.ForeignKey(User, on_delete=models.CASCADE)
     description = models.CharField(_('beskrivelse'), max_length=100)
     display_field_of_study = models.BooleanField(
         _('Vis studieoversikt'),
@@ -193,6 +194,10 @@ class Feedback(models.Model):
         default=True,
         help_text=_('En boks med ekstra informasjon vil bli vist til bedriften')
     )
+    available = models.BooleanField(
+        _('Vis feedbackskjemaet'),
+        default=True,
+        help_text=_('Dette brukes til å skjule ubrukte skjemaer, lager du et nytt, så ignorer denne.'))
 
     @property
     def ratingquestions(self):
@@ -231,30 +236,34 @@ class Feedback(models.Model):
         permissions = (
             ('view_feedback', 'View Feedback'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 class FieldOfStudyAnswer(models.Model):
     feedback_relation = models.ForeignKey(
         FeedbackRelation,
-        related_name="field_of_study_answers")
-
+        related_name="field_of_study_answers",
+        on_delete=models.CASCADE
+    )
     answer = models.SmallIntegerField(
         _('Studieretning'), choices=FIELD_OF_STUDY_CHOICES)
 
     def __str__(self):
         return self.get_answer_display()
 
-    class Meta(object):
+    class Meta:
         permissions = (
             ('view_fieldofstudyanswer', 'View FieldOfStudyAnswer'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 class TextQuestion(models.Model):
     feedback = models.ForeignKey(
         Feedback,
-        related_name='text_questions')
-
+        related_name='text_questions',
+        on_delete=models.CASCADE
+    )
     order = models.SmallIntegerField(_('Rekkefølge'), default=10)
     label = models.CharField(_('Spørsmål'), blank=False, max_length=256)
     display = models.BooleanField(_('Vis til bedrift'), default=True)
@@ -262,18 +271,25 @@ class TextQuestion(models.Model):
     def __str__(self):
         return self.label
 
-    class Meta(object):
+    class Meta:
         permissions = (
             ('view_textquestion', 'View TextQuestion'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 class TextAnswer(models.Model):
-    question = models.ForeignKey(TextQuestion, related_name='answer')
+    question = models.ForeignKey(
+        TextQuestion,
+        related_name='answer',
+        on_delete=models.CASCADE
+    )
 
     feedback_relation = models.ForeignKey(
         FeedbackRelation,
-        related_name="text_answers")
+        related_name="text_answers",
+        on_delete=models.CASCADE
+    )
 
     answer = models.TextField(_('svar'))
 
@@ -284,10 +300,11 @@ class TextAnswer(models.Model):
     def order(self):
         return self.question.order
 
-    class Meta(object):
+    class Meta:
         permissions = (
             ('view_textanswer', 'View TextAnswer'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 RATING_CHOICES = [(k, str(k)) for k in range(1, 7)]  # 1 to 6
@@ -297,7 +314,9 @@ RATING_CHOICES.insert(0, ("", ""))  # Adds a blank field to prevent 1 from beein
 class RatingQuestion(models.Model):
     feedback = models.ForeignKey(
         Feedback,
-        related_name='rating_questions')
+        related_name='rating_questions',
+        on_delete=models.CASCADE
+    )
 
     order = models.SmallIntegerField(_('Rekkefølge'), default=20)
     label = models.CharField(_('Spørsmål'), blank=False, max_length=256)
@@ -306,23 +325,29 @@ class RatingQuestion(models.Model):
     def __str__(self):
         return self.label
 
-    class Meta(object):
+    class Meta:
         permissions = (
             ('view_ratingquestion', 'View RatingQuestion'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 class RatingAnswer(models.Model):
     feedback_relation = models.ForeignKey(
         FeedbackRelation,
-        related_name="rating_answers")
-
+        related_name="rating_answers",
+        on_delete=models.CASCADE
+    )
     answer = models.SmallIntegerField(
         _('karakter'),
         choices=RATING_CHOICES,
         default=0)
 
-    question = models.ForeignKey(RatingQuestion, related_name='answer')
+    question = models.ForeignKey(
+        RatingQuestion,
+        related_name='answer',
+        on_delete=models.CASCADE
+    )
 
     def __str__(self):
         return self.get_answer_display()
@@ -331,61 +356,81 @@ class RatingAnswer(models.Model):
     def order(self):
         return self.question.order
 
-    class Meta(object):
+    class Meta:
         permissions = (
             ('view_ratinganswer', 'View RatingAnswer'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 class MultipleChoiceQuestion(models.Model):
     label = models.CharField(_('Spørsmål'), blank=False, max_length=256)
 
-    class Meta(object):
+    class Meta:
         verbose_name = _('Flervalgspørsmål')
         verbose_name_plural = _('Flervalgspørsmål')
         permissions = (
             ('view_multiplechoicequestion', 'View MultipleChoiceQuestion'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
     def __str__(self):
         return self.label
 
 
 class MultipleChoiceRelation(models.Model):
-    multiple_choice_relation = models.ForeignKey(MultipleChoiceQuestion)
+    multiple_choice_relation = models.ForeignKey(
+        MultipleChoiceQuestion,
+        on_delete=models.CASCADE
+    )
     order = models.SmallIntegerField(_('Rekkefølge'), default=30)
     display = models.BooleanField(_('Vis til bedrift'), default=True)
-    feedback = models.ForeignKey(Feedback, related_name='multiple_choice_questions')
+    feedback = models.ForeignKey(
+        Feedback,
+        related_name='multiple_choice_questions',
+        on_delete=models.CASCADE
+    )
 
     def __str__(self):
         return self.multiple_choice_relation.label
 
-    class Meta(object):
+    class Meta:
         permissions = (
             ('view_multiplechoicerelation', 'View MultipleChoiceRelation'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 class Choice(models.Model):
-    question = models.ForeignKey(MultipleChoiceQuestion, related_name="choices")
+    question = models.ForeignKey(
+        MultipleChoiceQuestion,
+        related_name="choices",
+        on_delete=models.CASCADE
+    )
     choice = models.CharField(_('valg'), max_length=256, blank=False)
 
     def __str__(self):
         return self.choice
 
-    class Meta(object):
+    class Meta:
         permissions = (
             ('view_choice', 'View Choice'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 class MultipleChoiceAnswer(models.Model):
     feedback_relation = models.ForeignKey(
         FeedbackRelation,
-        related_name="multiple_choice_answers")
-
+        related_name="multiple_choice_answers",
+        on_delete=models.CASCADE
+    )
     answer = models.CharField(_('svar'), blank=False, max_length=256)
-    question = models.ForeignKey(MultipleChoiceRelation, related_name='answer')
+    question = models.ForeignKey(
+        MultipleChoiceRelation,
+        related_name='answer',
+        on_delete=models.CASCADE
+    )
 
     def __str__(self):
         return self.answer
@@ -394,15 +439,20 @@ class MultipleChoiceAnswer(models.Model):
     def order(self):
         return self.question.order
 
-    class Meta(object):
+    class Meta:
         permissions = (
             ('view_multiplechoiceanswer', 'View MultipleChoiceAnswer'),
         )
+        default_permissions = ('add', 'change', 'delete')
 
 
 # For creating a link for others(companies) to see the results page
 class RegisterToken(models.Model):
-    fbr = models.ForeignKey(FeedbackRelation, related_name="Feedback_relation")
+    fbr = models.ForeignKey(
+        FeedbackRelation,
+        related_name="Feedback_relation",
+        on_delete=models.CASCADE
+    )
     token = models.CharField(_("token"), max_length=32)
     created = models.DateTimeField(_("opprettet dato"), editable=False, auto_now_add=True)
 
@@ -413,7 +463,8 @@ class RegisterToken(models.Model):
         # now = timezone.now()
         # return now < self.created + valid_period
 
-    class Meta(object):
+    class Meta:
         permissions = (
             ('view_feedbackregistertoken', 'View FeedbackRegisterToken'),
         )
+        default_permissions = ('add', 'change', 'delete')
